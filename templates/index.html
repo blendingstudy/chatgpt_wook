@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat AI</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+        .message-container {
+            max-width: 800px;
+            margin: auto;
+            margin-bottom: 1rem;
+        }
+
+        .message-box {
+            border-radius: 10px;
+            padding: 10px;
+            display: inline-block;
+            max-width: 70%;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .user-message {
+            text-align: right;
+        }
+
+        .user-message .message-box {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .ai-message {
+            text-align: left;
+        }
+
+        .ai-message .message-box {
+            background-color: #f8f9fa;
+            color: #212529;
+        }
+
+        .name-label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        pre {
+            margin: 0;
+            padding: 0;
+            white-space: pre-wrap;
+            background-color: transparent;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mt-3">Chat AI</h1>
+        <div id="chat-container" class="mt-5">
+        </div>
+        <form id="message-form" class="mt-5">
+            <div class="form-group">
+                <label for="message-input">메세지 입력 : </label>
+                <textarea class="form-control" id="message-input" name="message" required rows="1"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Send</button>
+        </form>
+    </div>
+
+    <script>
+        function isCodeSnippet(message) {
+            const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
+            return codePattern.test(message);
+        }
+
+        function formatCodeSnippet(message) {
+            const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
+            return message.replace(codePattern, '<pre>$2</pre>');
+        }
+
+        function addMessage(content, isUser) {
+            const className = isUser ? "user-message" : "ai-message";
+            const name = isUser ? "Admin" : "GPTChat";
+            const nameLabel = $("<div>").addClass("name-label").text(name);
+            const messageBox = $("<pre>").addClass("message-box");
+            const messageContainer = $("<div>").addClass("message-container " + className);
+            const formattedContent = isCodeSnippet(content) ? formatCodeSnippet(content) : content;
+            messageBox.html(formattedContent);
+            messageContainer.append(nameLabel).append(messageBox);
+            $("#chat-container").append(messageContainer);
+        }
+        function loadChatHistory() {
+        $.ajax({
+            url: "/chat_history",
+            method: "GET",
+            success: function(chatHistory) {
+                for (const message of chatHistory) {
+                    addMessage(message.content, message.role === "user");
+                }
+            },
+            error: function() {
+                console.error("Error: Could not load chat history.");
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        loadChatHistory();
+
+        $("#message-form").submit(function(event) {
+            event.preventDefault();
+
+            const message = $("#message-input").val();
+            addMessage(message, true);
+
+            $.ajax({
+                url: "/message",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ message: message }),
+                success: function(response) {
+                    addMessage(response.response, false);
+                },
+                error: function() {
+                    addMessage("Error: Could not get a response.", false);
+                }
+    });
+    $("#message-input").val("");
+        });
+    });
+    function autoResizeTextarea(textarea) {
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
+    }
+
+    $("#message-input").on("input", function () {
+        autoResizeTextarea(this);
+    });
+
+    function handleGptResponse(response) {
+    if (response.download_link) {
+        let download_link = document.createElement("a");
+        download_link.href = response.download_link;
+        download_link.textContent = "다운로드 링크";
+        download_link.download = response.download_link.split("/").pop();
+        download_link.target = "_blank";
+
+        let pre = document.createElement("pre");
+        pre.textContent = "코드가 생성되었습니다. 아래 코드를 확인하고 다운로드하세요.";
+
+        messageContainer.appendChild(pre);
+
+        messageContainer.appendChild(download_link);
+
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+    } else {
+        messageContainer.innerHTML += `<p>${response.response}</p>`;
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+    }
+}
+
+</script>
+</body>
+</html>
