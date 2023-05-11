@@ -1,35 +1,46 @@
+# -*- coding: euc-kr -*-
+import os
+import openai
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from bs4 import BeautifulSoup
 import json, openai, requests
 from pathlib import Path
-import uuid
+import sqlite3
 import re
-import os
+import uuid
 
-#download_url = "https://naver.com/"
-download_url = ""
-
+openai.api_key = "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"  
+download_url = "http://127.0.0.1/"
 app = Flask(__name__)
-
 chat_log = []
-
 CHAT_HISTORY_FILE = "chat_history.json"
+DATABASE = "chat_history.db"
+
+def create_table():
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_history
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT)''')
+    conn.commit()
+    conn.close()
 
 def load_chat_history():
-    if os.path.exists(CHAT_HISTORY_FILE):
-        with open(CHAT_HISTORY_FILE, "r") as f:
-            return json.load(f)
-    return []
+    create_table()
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT role, content FROM chat_history")
+    chat_log = [{"role": row[0], "content": row[1]} for row in c.fetchall()]
+    conn.close()
+    return chat_log
 
-def save_chat_history(chat_log):
+def save_chat_history(role, content):
     with open(CHAT_HISTORY_FILE, "w") as f:
-        json.dump(chat_log, f)
-
-with open("config.json", "r") as f:
-    config = json.load(f)
-
-openai.api_key = config["API_KEY"]
-print( "apikey" ,  openai.api_key )
+        json.dump(content, f)
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("INSERT INTO chat_history (role, content) VALUES (?, ?)", (role, content))
+    conn.commit()
+    conn.close()
 
 chat_log = load_chat_history()
 
@@ -49,15 +60,14 @@ def search_title_in_url(url, search_title):
     except Exception as e:
         print(f"Error searching title in URL: {e}")
         return None
-    
-    
+
 def find_links_with_partial_title(soup, partial_title):
     links = soup.find_all('a', string=lambda text: text and partial_title in text)
     return [{"text": link.text, "href": link['href']} for link in links if 'href' in link.attrs]
 
 CODE_STORAGE_PATH = "saved_code"
 
-def process_and_store_code_block(code_block: str) -> str:
+def process_and_store_code_block(code_block: str, file_name: str) -> str:
     language_match = re.search(r"```(\w+)", code_block)
     if language_match:
         language = language_match.group(1).lower()
@@ -65,18 +75,50 @@ def process_and_store_code_block(code_block: str) -> str:
         language = "txt"
 
     extension = LANGUAGE_EXTENSIONS.get(language, "txt")
-    code = re.search(r"```\w+\n([\s\S]*?)```", code_block).group(1).strip()
-    file_name = f"{uuid.uuid4()}.{extension}"
+    if not file_name.endswith(f".{extension}"):
+        file_name += f".{extension}"
     file_path = os.path.join(CODE_STORAGE_PATH, file_name)
     
     with open(file_path, "w") as f:
-        f.write(code)
+        f.write(code_block)
     
     return file_name
 
+def extract_filename(user_message: str, gpt_response: str, language: str) -> str:
+    extensions_pattern = r'\.(?:py|js|html|css|java|c|cpp|cs|php|rb|swift|go|kt)'
+    pattern = fr'\b(?:main|([a-zA-Z0-9-_]+)){extensions_pattern}\b'
+    
+    # ¸ÕÀú »ç¿ëÀÚ ¸Ş½ÃÁö¿¡¼­ ÆÄÀÏ ÀÌ¸§°ú È®ÀåÀÚ¸¦ ÃßÃâÇÕ´Ï´Ù.
+    match = re.search(pattern, user_message)
+    if match:
+        return match.group()
+    
+    # »ç¿ëÀÚ ¸Ş½ÃÁö¿¡¼­ Ã£Áö ¸øÇÑ °æ¿ì, GPT ÀÀ´ä¿¡¼­ ÆÄÀÏ ÀÌ¸§°ú È®ÀåÀÚ¸¦ ÃßÃâÇÕ´Ï´Ù.
+    match = re.search(pattern, gpt_response)
+    if match:
+        return match.group()
+    
+    # ÆÄÀÏ ÀÌ¸§°ú È®ÀåÀÚ¸¦ Ã£Áö ¸øÇÑ °æ¿ì, ¾ğ¾î¿¡ ±â¹İÇÑ ±âº» ÀÌ¸§°ú È®ÀåÀÚ¸¦ »ç¿ëÇÕ´Ï´Ù.
+    default_file_name = f"generated_code.{LANGUAGE_EXTENSIONS.get(language, 'txt')}"
+    return default_file_name
+
+
+
+def get_url_summary(url: str) -> str:
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+        title = soup.find("title")
+        if title:
+            return f"URL ¿ä¾à: {title.string}"
+        else:
+            return "URL ¿ä¾à: Á¦¸ñÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù."
+    except Exception as e:
+        print(f"Error getting URL summary: {e}")
+        return "URL ¿ä¾à: ¿äÃ» Áß ¿À·ù°¡ ¹ß»ıÇß½À´Ï´Ù."
 
 Path(CODE_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
-
 
 LANGUAGE_EXTENSIONS = {
     "python": "py",
@@ -94,7 +136,6 @@ LANGUAGE_EXTENSIONS = {
     "kotlin": "kt",
 }
 
-
 @app.route('/message', methods=['POST'])
 def process_message():
     global chat_log
@@ -103,37 +144,11 @@ def process_message():
     user_message = data.get('message')
 
     if user_message:
-        if user_message.startswith("!ì§€ì •"):
-            base_url = user_message[5:].strip()
-            chat_log.append({"role": "user", "content": user_message})
-            chat_log.append({"role": "assistant", "content": f"URL ì§€ì •: {base_url}"})
-            save_chat_history(chat_log)
-            return jsonify({"response": f"URL ì§€ì •: {base_url}"})
-
-        if user_message.startswith("!ê²€ìƒ‰"):
-            search_title = user_message[5:].strip()
-            if base_url:
-                try:
-                    response = requests.get(base_url)
-                    response.raise_for_status()
-                    soup = BeautifulSoup(response.content, "html.parser")
-                    matching_links = find_links_with_partial_title(soup, search_title)
-                    if matching_links:
-                        response_text = "ê²€ìƒ‰ ê²°ê³¼:\n" + "\n".join([f'{link["text"]}: {link["href"]}' for link in matching_links])
-                    else:
-                        response_text = "ê²€ìƒ‰ ê²°ê³¼ê°€ ì—†ìŠµë‹ˆë‹¤."
-                except Exception as e:
-                    response_text = f"ê²€ìƒ‰ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤: {e}"
-            else:
-                response_text = "ê¸°ë³¸ URLì´ ì§€ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. !ì§€ì • ëª…ë ¹ìœ¼ë¡œ URLì„ ì§€ì •í•´ì£¼ì„¸ìš”."
-
-            chat_log.append({"role": "user", "content": user_message})
-            chat_log.append({"role": "assistant", "content": response_text})
-            save_chat_history(chat_log)
-            return jsonify({"response": response_text})
-
+        if user_message.startswith("http://") or user_message.startswith("https://"):
+            url_summary = get_url_summary(user_message)
+            return jsonify({"response": url_summary})
         chat_log.append({"role": "user", "content": user_message})
-        save_chat_history(chat_log)
+        save_chat_history("user", user_message)
 
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -141,27 +156,37 @@ def process_message():
         )
         gpt_response = response["choices"][0]["message"]["content"]
         chat_log.append({"role": "assistant", "content": gpt_response})
-        save_chat_history(chat_log)
+        save_chat_history("assistant", gpt_response)
 
-        code_block_match = re.search(r"```\w+\n([\s\S]*?)```", gpt_response)
-        if code_block_match:
-            file_name = process_and_store_code_block(gpt_response)
-            download_link = f"{download_url}download/{file_name}"
-            gpt_response = gpt_response+ f"ì½”ë“œê°€ ìƒì„±ë˜ì—ˆìŠµë‹ˆë‹¤. ë‹¤ìŒ ë§í¬ë¥¼ í†µí•´ ë‹¤ìš´ë¡œë“œí•˜ì„¸ìš”: {download_link}"
-        
-        chat_log.append({"role": "assistant", "content": gpt_response})
-        save_chat_history(chat_log)
+        code_block_matches = list(re.finditer(r"```\w+\n([\s\S]*?)```", gpt_response))
+        download_links = []
+        if code_block_matches:
+            for match in code_block_matches:
+                code_block = match.group(0)
+                # ¾ğ¾î¸¦ ÃßÃâÇÕ´Ï´Ù.
+                language_match = re.search(r"```(\w+)", code_block)
+                if language_match:
+                    language = language_match.group(1).lower()
+                else:
+                    # ±âº» ¾ğ¾î·Î ¼³Á¤ÇÕ´Ï´Ù.
+                    language = "txt"
+                file_name = extract_filename(user_message, gpt_response, language)
+                stored_file_name = process_and_store_code_block(code_block, file_name)
+                download_link = f"{download_url}download/{stored_file_name}"
+                download_links.append(download_link)
+
+            gpt_response += "\n\nÄÚµå°¡ »ı¼ºµÇ¾ú½À´Ï´Ù. ´ÙÀ½ ¸µÅ©¸¦ ÅëÇØ ´Ù¿î·ÎµåÇÏ¼¼¿ä:"
+            for link in download_links:
+                gpt_response += f"\n{link}"
 
         return jsonify({"response": gpt_response})
     else:
         return jsonify({"error": "Invalid input"}), 400
-    
 
 @app.route('/download/<path:filename>', methods=['GET'])
 def download(filename):
     return send_from_directory(CODE_STORAGE_PATH, filename, as_attachment=True)
-    
-    
+
 @app.route('/chat_history', methods=['GET'])
 def get_chat_history():
     return jsonify(chat_log)

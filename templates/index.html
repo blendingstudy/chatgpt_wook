@@ -1,14 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat AI</title>
+<html>
+  <head>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <title>GPT</title>
     <style>
-        .message-container {
+      html, body {
+        height: 100%;
+      }
+      .full {
+        height: 100%;
+      }
+      .container-fluid {
+        height: 100%;
+      }
+      .chat-list {
+        height: 100%;
+        background-color: rgb(37, 37, 37);
+        color:antiquewhite;
+      }
+      .chat-area {
+        height: 100%;
+        background-color: rgb(70, 70, 70);
+      }
+      .chat-history {
+        height: 90%;
+        margin: 5px;
+      }
+      .chat-typing {
+        margin: 5px;
+      }
+      #message-input {
+        width:100%;
+      }
+      .form-row {
+        margin: 5px;
+      }
+      
+      /* get */
+      .message-container {
             max-width: 800px;
             margin: auto;
             margin-bottom: 1rem;
@@ -28,8 +58,8 @@
         }
 
         .user-message .message-box {
-            background-color: #007bff;
-            color: white;
+            background-color: #fbe83d;
+            color: #212529;
         }
 
         .ai-message {
@@ -43,8 +73,28 @@
 
         .name-label {
             display: block;
-            font-weight: bold;
+            /* font-weight: bold; */
             margin-bottom: 5px;
+            color: #898989;
+        }
+
+        .chat-item {
+          height: 30px;
+          border: 1px solid;
+          border-color: #898989;
+          border-radius: 5px;
+          margin-top: 5px;
+          text-align : center;
+          color:rgb(70, 70, 70)
+        }
+
+        .chat-item:hover {
+          color: gray;
+          cursor : pointer
+        }
+
+        .clicked {
+          color:red;
         }
 
         pre {
@@ -55,113 +105,113 @@
             border: none;
         }
     </style>
-</head>
-<body>
-    <div class="container">
-        <h1 class="text-center mt-3">Chat AI</h1>
-        <div id="chat-container" class="mt-5">
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row full">
+        <div class="col-md-2 chat-list" id="chat-list">
+          <button class="btn btn-outline-secondary" style="width:100%;margin-top:15px" onclick="newChat()"> + New chat</button>
         </div>
-        <form id="message-form" class="mt-5">
-            <div class="form-group">
-                <label for="message-input">메세지 입력 : </label>
-                <textarea class="form-control" id="message-input" name="message" required rows="1"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Send</button>
-        </form>
+        <div class="col-md-10 chat-area">
+          <div class="chat-history" id="chat-container" style="overflow:scroll">
+            <!-- chat-history -->
+          </div>
+          <div class="chat-typing">
+            <form id="message-form" style="width:100%;">
+              <div class="form-row">
+                <div class="col-11">
+                  <input type="text" class="form-control" id="message-input" placeholder="Send a message" aria-label="Recipient's username" aria-describedby="button-addon2">
+                </div>
+                <div class="col-auto">
+                  <button class="btn btn-outline-secondary" type="submit" id="button-addon2">send</button>
+                </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
-
     <script>
-        function isCodeSnippet(message) {
-            const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
-            return codePattern.test(message);
-        }
 
-        function formatCodeSnippet(message) {
-            const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
-            return message.replace(codePattern, '<pre>$2</pre>');
-        }
+      function isCodeSnippet(message) {
+        const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
+        return codePattern.test(message);
+      }
 
-        function addMessage(content, isUser) {
-            const className = isUser ? "user-message" : "ai-message";
-            const name = isUser ? "Admin" : "GPTChat";
-            const nameLabel = $("<div>").addClass("name-label").text(name);
-            const messageBox = $("<pre>").addClass("message-box");
-            const messageContainer = $("<div>").addClass("message-container " + className);
-            const formattedContent = isCodeSnippet(content) ? formatCodeSnippet(content) : content;
-            messageBox.html(formattedContent);
-            messageContainer.append(nameLabel).append(messageBox);
-            $("#chat-container").append(messageContainer);
+      function formatCodeSnippet(message) {
+        const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
+        return message.replace(codePattern, '<pre>$2</pre>');
+      }
+
+      $.fn.hasScrollBar = function() {
+        return (this.prop("scrollHeight") == 0 && this.prop("clientHeight") == 0) || (this.prop("scrollHeight") > this.prop("clientHeight"));
+      }
+
+      function newChat() {
+        $("#chat-list").append("<div class='chat-item' onclick='clickChat(e)'>new chat</div>")
+      }
+
+      function clickChat(e) {
+        this.addClass("clicked")
+      }
+
+      function addMessage(content, isUser) {
+        const className = isUser ? "user-message" : "ai-message";
+        const name = isUser ? "Me" : "GPTChat";
+        const nameLabel = $("<div>").addClass("name-label").text(name);
+        const messageBox = $("<pre>").addClass("message-box");
+        const messageContainer = $("<div>").addClass("message-container " + className);
+        const formattedContent = isCodeSnippet(content) ? formatCodeSnippet(content) : content;
+        messageBox.html(formattedContent);
+        messageContainer.append(nameLabel).append(messageBox);
+        $("#chat-container").append(messageContainer);
+        if($('#chat-container').hasScrollBar()) {
+          $('#chat-container').animate({
+            scrollTop: $('#chat-container')[0].scrollHeight
+          }, 400);
         }
-        function loadChatHistory() {
+      }
+
+      function loadChatHistory() {
         $.ajax({
-            url: "/chat_history",
-            method: "GET",
-            success: function(chatHistory) {
-                for (const message of chatHistory) {
-                    addMessage(message.content, message.role === "user");
-                }
-            },
-            error: function() {
-                console.error("Error: Could not load chat history.");
-            }
+          url: "/chat_history",
+          method: "GET",
+          success: function(chatHistory) {
+              for (const message of chatHistory) {
+                  addMessage(message.content, message.role === "user");
+              }
+          },
+          error: function() {
+              console.error("Error: Could not load chat history.");
+          }
         });
-    }
+      }
 
-    $(document).ready(function() {
+      $(document).ready(function() {
         loadChatHistory();
 
         $("#message-form").submit(function(event) {
-            event.preventDefault();
+          event.preventDefault();
 
-            const message = $("#message-input").val();
-            addMessage(message, true);
+          const message = $("#message-input").val();
+          addMessage(message, true);
 
-            $.ajax({
-                url: "/message",
-                method: "POST",
-                contentType: "application/json",
-                data: JSON.stringify({ message: message }),
-                success: function(response) {
-                    addMessage(response.response, false);
-                },
-                error: function() {
-                    addMessage("Error: Could not get a response.", false);
-                }
-    });
-    $("#message-input").val("");
+          $.ajax({
+              url: "/message",
+              method: "POST",
+              contentType: "application/json",
+              data: JSON.stringify({ message: message }),
+              success: function(response) {
+                  addMessage(response.response, false);
+              },
+              error: function() {
+                  addMessage("Error: Could not get a response.", false);
+              }
+          });
+          $("#message-input").val("");
         });
-    });
-    function autoResizeTextarea(textarea) {
-    textarea.style.height = "auto";
-    textarea.style.height = textarea.scrollHeight + "px";
-    }
-
-    $("#message-input").on("input", function () {
-        autoResizeTextarea(this);
-    });
-
-    function handleGptResponse(response) {
-    if (response.download_link) {
-        let download_link = document.createElement("a");
-        download_link.href = response.download_link;
-        download_link.textContent = "다운로드 링크";
-        download_link.download = response.download_link.split("/").pop();
-        download_link.target = "_blank";
-
-        let pre = document.createElement("pre");
-        pre.textContent = "코드가 생성되었습니다. 아래 코드를 확인하고 다운로드하세요.";
-
-        messageContainer.appendChild(pre);
-
-        messageContainer.appendChild(download_link);
-
-        messageContainer.scrollTop = messageContainer.scrollHeight;
-    } else {
-        messageContainer.innerHTML += `<p>${response.response}</p>`;
-        messageContainer.scrollTop = messageContainer.scrollHeight;
-    }
-}
-
-</script>
-</body>
+      });
+    </script>
+  </body>
 </html>
