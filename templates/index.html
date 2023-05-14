@@ -93,8 +93,8 @@
           cursor : pointer
         }
 
-        .clicked {
-          color:red;
+        .on {
+          color:gray;
         }
 
         pre {
@@ -148,12 +148,17 @@
         return (this.prop("scrollHeight") == 0 && this.prop("clientHeight") == 0) || (this.prop("scrollHeight") > this.prop("clientHeight"));
       }
 
-      function newChat() {
-        $("#chat-list").append("<div class='chat-item' onclick='clickChat(e)'>new chat</div>")
+      function newChat(id, chatName) {
+        const append = "<div class='chat-item on' onclick='clickChat(e)'>" + chatName + "</div>"
+        $("#chat-list").append(append)
       }
 
       function clickChat(e) {
         this.addClass("clicked")
+      }
+
+      function addChatList(id, chatName) {
+        newChat(id, chatName)
       }
 
       function addMessage(content, isUser) {
@@ -173,6 +178,36 @@
         }
       }
 
+      function chat_list_add() {
+        $.ajax({
+          url: "/chat_list_add",
+          method: "GET",
+          success: function(response) {
+              if(response.addYn == "Y") {
+                newChat(response.chatKey, response.chatName)
+              }
+          },
+          error: function() {
+              console.error("Error: Could not load chat history.");
+          }
+        });
+      }
+
+      function loadChatListHistory() {
+        $.ajax({
+          url: "/chat_list_history",
+          method: "GET",
+          success: function(chatList) {
+              for (const chat of chatList) {
+                  addChatList(chat.id, chat.chatName);
+              }
+          },
+          error: function() {
+              console.error("Error: Could not load chat history.");
+          }
+        });
+      }
+      
       function loadChatHistory() {
         $.ajax({
           url: "/chat_history",
@@ -189,6 +224,7 @@
       }
 
       $(document).ready(function() {
+        loadChatListHistory();
         loadChatHistory();
 
         $("#message-form").submit(function(event) {
@@ -204,6 +240,7 @@
               data: JSON.stringify({ message: message }),
               success: function(response) {
                   addMessage(response.response, false);
+                  chat_list_add();
               },
               error: function() {
                   addMessage("Error: Could not get a response.", false);

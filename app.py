@@ -9,26 +9,40 @@ import sqlite3
 import re
 import uuid
 
-openai.api_key = "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"  
+# openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
+chatKey = "1"
 chat_log = []
+chat_list_log = []
 CHAT_HISTORY_FILE = "chat_history.json"
 DATABASE = "chat_history.db"
 
 def create_table():
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_list
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, chatName TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS chat_history
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, chatKey INTEGER, role TEXT, content TEXT)''')
     conn.commit()
     conn.close()
+
+def load_chat_list_history():
+    create_table()
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("SELECT id, chatName FROM chat_list")
+    chat_list_log = [{"id": row[0], "chatName": row[1]} for row in c.fetchall()]
+    conn.close()
+    return chat_list_log
 
 def load_chat_history():
     create_table()
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
-    c.execute("SELECT role, content FROM chat_history")
+    c.execute("SELECT role, content FROM chat_history where chatKey = " + chatKey)
     chat_log = [{"role": row[0], "content": row[1]} for row in c.fetchall()]
     conn.close()
     return chat_log
@@ -38,11 +52,17 @@ def save_chat_history(role, content):
         json.dump(content, f)
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
-    c.execute("INSERT INTO chat_history (role, content) VALUES (?, ?)", (role, content))
+    c.execute("INSERT INTO chat_history (chatKey, role, content) VALUES (?, ?, ?)", (chatKey, role, content))
     conn.commit()
     conn.close()
 
+
+    
+
+
+
 chat_log = load_chat_history()
+chat_list_log = load_chat_list_history()
 
 @app.route('/')
 def home():
@@ -187,9 +207,33 @@ def process_message():
 def download(filename):
     return send_from_directory(CODE_STORAGE_PATH, filename, as_attachment=True)
 
+@app.route('/chat_list_history', methods=['GET'])
+def get_chat_list_history():
+    return jsonify(chat_list_log)
+
 @app.route('/chat_history', methods=['GET'])
 def get_chat_history():
     return jsonify(chat_log)
+
+@app.route('/chat_list_add', methods=['GET'])
+def chat_list_add():
+    # chatKey의 첫번째 답변이면 대화목록 생성
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    response = {}
+    response["chatKey"] = chatKey
+    c.execute("SELECT count() FROM chat_history where chatKey = ?; ", (chatKey))
+    row = c.fetchone();
+    if row[0] == 2:
+        response["addYn"] = "Y"
+        c.execute("SELECT content FROM chat_history where chatKey = ? and id = '1'; ", (chatKey))
+        chatName = c.fetchone()[0][0:10]
+        response["chatName"] = chatName
+        # insert
+        c.execute("INSERT INTO chat_list (chatName) VALUES (?)", (chatName,))
+    else:
+        response["addYn"] = "N" 
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
