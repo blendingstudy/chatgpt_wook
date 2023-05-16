@@ -94,7 +94,7 @@
         }
 
         .on {
-          color:gray;
+          color:rgb(209, 194, 78);
         }
 
         pre {
@@ -110,7 +110,7 @@
     <div class="container-fluid">
       <div class="row full">
         <div class="col-md-2 chat-list" id="chat-list">
-          <button class="btn btn-outline-secondary" style="width:100%;margin-top:15px" onclick="newChat()"> + New chat</button>
+          <button class="btn btn-outline-secondary" style="width:100%;margin-top:15px" onclick="newChatPage()"> + New chat</button>
         </div>
         <div class="col-md-10 chat-area">
           <div class="chat-history" id="chat-container" style="overflow:scroll">
@@ -148,13 +148,18 @@
         return (this.prop("scrollHeight") == 0 && this.prop("clientHeight") == 0) || (this.prop("scrollHeight") > this.prop("clientHeight"));
       }
 
+      function newChatPage() {
+        $(".chat-item").removeClass('on');
+        $("#chat-container").empty()
+      }
+
       function newChat(id, chatName) {
-        const append = "<div class='chat-item on' onclick='clickChat(e)'>" + chatName + "</div>"
+        const append = "<div id='" + id + "' class='chat-item on' onclick='clickChat()'>" + chatName + "</div>"
         $("#chat-list").append(append)
       }
 
       function clickChat(e) {
-        this.addClass("clicked")
+        this.addClass("on")
       }
 
       function addChatList(id, chatName) {
@@ -178,14 +183,15 @@
         }
       }
 
-      function chat_list_add() {
+      function chat_list_add(chatKey) {
         $.ajax({
-          url: "/chat_list_add",
+          url: "/chat_list_add/" + chatKey,
           method: "GET",
           success: function(response) {
               if(response.addYn == "Y") {
                 newChat(response.chatKey, response.chatName)
               }
+              // loadChatHistory()
           },
           error: function() {
               console.error("Error: Could not load chat history.");
@@ -201,6 +207,7 @@
               for (const chat of chatList) {
                   addChatList(chat.id, chat.chatName);
               }
+              loadChatHistory()
           },
           error: function() {
               console.error("Error: Could not load chat history.");
@@ -209,9 +216,12 @@
       }
       
       function loadChatHistory() {
+        chatKey = $(".chat-item.on").attr('id');
         $.ajax({
-          url: "/chat_history",
+          url: "/chat_history/" + chatKey,
           method: "GET",
+          // contentType: "application/json",
+          // data: JSON.stringify({ chatKey: chatKey }),
           success: function(chatHistory) {
               for (const message of chatHistory) {
                   addMessage(message.content, message.role === "user");
@@ -225,11 +235,13 @@
 
       $(document).ready(function() {
         loadChatListHistory();
-        loadChatHistory();
+        // loadChatHistory();
 
         $("#message-form").submit(function(event) {
           event.preventDefault();
 
+          //chatKey. null이면 newChat
+          chatKey = $(".chat-item.on").attr('id');
           const message = $("#message-input").val();
           addMessage(message, true);
 
@@ -237,10 +249,10 @@
               url: "/message",
               method: "POST",
               contentType: "application/json",
-              data: JSON.stringify({ message: message }),
+              data: JSON.stringify({ chatKey: chatKey, message: message }),
               success: function(response) {
                   addMessage(response.response, false);
-                  chat_list_add();
+                  chat_list_add(response.chatKey);
               },
               error: function() {
                   addMessage("Error: Could not get a response.", false);

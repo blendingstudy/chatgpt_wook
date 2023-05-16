@@ -10,7 +10,7 @@ import re
 import uuid
 
 # openai.api_key = "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"  
-openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
 chatKey = "1"
@@ -38,7 +38,7 @@ def load_chat_list_history():
     conn.close()
     return chat_list_log
 
-def load_chat_history():
+def load_chat_history(chatKey):
     create_table()
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
@@ -47,9 +47,10 @@ def load_chat_history():
     conn.close()
     return chat_log
 
-def save_chat_history(role, content):
+def save_chat_history(chatKey, role, content):
     with open(CHAT_HISTORY_FILE, "w") as f:
         json.dump(content, f)
+    
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
     c.execute("INSERT INTO chat_history (chatKey, role, content) VALUES (?, ?, ?)", (chatKey, role, content))
@@ -61,7 +62,7 @@ def save_chat_history(role, content):
 
 
 
-chat_log = load_chat_history()
+chat_log = load_chat_history("1")
 chat_list_log = load_chat_list_history()
 
 @app.route('/')
@@ -162,13 +163,22 @@ def process_message():
     global base_url
     data = request.get_json()
     user_message = data.get('message')
+    chatKey = data.get('chatKey')
+    # chatKey가 없으면 newChat. 새로운chatKey 생성해야함
+    if chatKey == None:
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        # todo null일때 처리해주어야함
+        c.execute("SELECT IFNULL(max(id), 0)+1 FROM chat_list")
+        chatKey = c.fetchone()[0]
+        conn.close()
 
     if user_message:
         if user_message.startswith("http://") or user_message.startswith("https://"):
             url_summary = get_url_summary(user_message)
             return jsonify({"response": url_summary})
         chat_log.append({"role": "user", "content": user_message})
-        save_chat_history("user", user_message)
+        save_chat_history(chatKey, "user", user_message)
 
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -176,7 +186,7 @@ def process_message():
         )
         gpt_response = response["choices"][0]["message"]["content"]
         chat_log.append({"role": "assistant", "content": gpt_response})
-        save_chat_history("assistant", gpt_response)
+        save_chat_history(chatKey, "assistant", gpt_response)
 
         code_block_matches = list(re.finditer(r"```\w+\n([\s\S]*?)```", gpt_response))
         download_links = []
@@ -199,7 +209,7 @@ def process_message():
             for link in download_links:
                 gpt_response += f"\n{link}"
 
-        return jsonify({"response": gpt_response})
+        return jsonify({"response": gpt_response, "chatKey" : chatKey})
     else:
         return jsonify({"error": "Invalid input"}), 400
 
@@ -211,26 +221,33 @@ def download(filename):
 def get_chat_list_history():
     return jsonify(chat_list_log)
 
-@app.route('/chat_history', methods=['GET'])
-def get_chat_history():
+@app.route('/chat_history/<path:chatKey>', methods=['GET'])
+def get_chat_history(chatKey):
+    if chatKey != 'undefined':
+        load_chat_history(chatKey)
     return jsonify(chat_log)
 
-@app.route('/chat_list_add', methods=['GET'])
-def chat_list_add():
+@app.route('/chat_list_add/<path:chatKey>', methods=['GET'])
+def chat_list_add(chatKey):
     # chatKey의 첫번째 답변이면 대화목록 생성
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
     response = {}
     response["chatKey"] = chatKey
-    c.execute("SELECT count() FROM chat_history where chatKey = ?; ", (chatKey))
+    c.execute("SELECT count() FROM chat_history where chatKey = ?; ", (chatKey,))
     row = c.fetchone();
     if row[0] == 2:
         response["addYn"] = "Y"
-        c.execute("SELECT content FROM chat_history where chatKey = ? and id = '1'; ", (chatKey))
+        c.execute("SELECT content FROM chat_history where chatKey = ? and role = 'user'; ", (chatKey,))
         chatName = c.fetchone()[0][0:10]
+        conn.close()
         response["chatName"] = chatName
         # insert
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
         c.execute("INSERT INTO chat_list (chatName) VALUES (?)", (chatName,))
+        conn.commit()
+        conn.close()
     else:
         response["addYn"] = "N" 
     return response
