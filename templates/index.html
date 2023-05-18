@@ -7,6 +7,8 @@
     <style>
       html, body {
         height: 100%;
+        scroll-behavior: smooth;
+
       }
       .full {
         height: 100%;
@@ -89,7 +91,13 @@
         }
 
         .chat-item:hover {
-          color: gray;
+          color: rgb(209, 194, 78);
+          cursor : pointer
+        }
+
+        .chat-item:hover > .deleteIcon {
+          visibility: '';
+          color: red;
           cursor : pointer
         }
 
@@ -113,7 +121,7 @@
           <button class="btn btn-outline-secondary" style="width:100%;margin-top:15px" onclick="newChatPage()"> + New chat</button>
         </div>
         <div class="col-md-10 chat-area">
-          <div class="chat-history" id="chat-container" style="overflow:scroll">
+          <div class="chat-history" id="chat-container" style="overflow-y: auto;">
             <!-- chat-history -->
           </div>
           <div class="chat-typing">
@@ -123,6 +131,7 @@
                   <input type="text" class="form-control" id="message-input" placeholder="Send a message" aria-label="Recipient's username" aria-describedby="button-addon2">
                 </div>
                 <div class="col-auto">
+                  <span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;'>-</span>
                   <button class="btn btn-outline-secondary" type="submit" id="button-addon2">send</button>
                 </div>
                 </div>
@@ -153,13 +162,20 @@
         $("#chat-container").empty()
       }
 
-      function newChat(id, chatName) {
-        const append = "<div id='" + id + "' class='chat-item on' onclick='clickChat()'>" + chatName + "</div>"
+      function newChat(id, chatName, newChatYn) {
+        let append
+        if(id == 1 || newChatYn  == 'Y'){
+          append = "<div id='" + id + "' class='chat-item on' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;'>-</span></div>"
+        }else {
+          append = "<div id='" + id + "' class='chat-item' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;'>-</span></div>"
+        }
         $("#chat-list").append(append)
       }
 
-      function clickChat(e) {
-        this.addClass("on")
+      function clickChat(id) {
+        $(".chat-item").removeClass('on')
+        $("#"+id).addClass("on")
+        loadChatHistory()
       }
 
       function addChatList(id, chatName) {
@@ -189,7 +205,7 @@
           method: "GET",
           success: function(response) {
               if(response.addYn == "Y") {
-                newChat(response.chatKey, response.chatName)
+                newChat(response.chatKey, response.chatName, 'Y')
               }
               // loadChatHistory()
           },
@@ -216,12 +232,11 @@
       }
       
       function loadChatHistory() {
+        $("#chat-container").empty()
         chatKey = $(".chat-item.on").attr('id');
         $.ajax({
           url: "/chat_history/" + chatKey,
           method: "GET",
-          // contentType: "application/json",
-          // data: JSON.stringify({ chatKey: chatKey }),
           success: function(chatHistory) {
               for (const message of chatHistory) {
                   addMessage(message.content, message.role === "user");

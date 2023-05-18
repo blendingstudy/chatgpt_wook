@@ -10,7 +10,7 @@ import re
 import uuid
 
 # openai.api_key = "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"  
-openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
 chatKey = "1"
@@ -224,8 +224,9 @@ def get_chat_list_history():
 @app.route('/chat_history/<path:chatKey>', methods=['GET'])
 def get_chat_history(chatKey):
     if chatKey != 'undefined':
-        load_chat_history(chatKey)
-    return jsonify(chat_log)
+        return jsonify(load_chat_history(chatKey))
+    else:
+        return jsonify(chat_log)
 
 @app.route('/chat_list_add/<path:chatKey>', methods=['GET'])
 def chat_list_add(chatKey):
