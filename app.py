@@ -10,7 +10,7 @@ import re
 import uuid
 
 # openai.api_key = "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"  
-openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
 chatKey = "1"
@@ -171,6 +171,9 @@ def process_message():
         # todo null老锭 贸府秦林绢具窃
         c.execute("SELECT IFNULL(max(id), 0)+1 FROM chat_list")
         chatKey = c.fetchone()[0]
+        if chatKey == 1:
+            c.execute("UPDATE SQLITE_SEQUENCE SET seq = 0 WHERE name = 'chat_list'")
+            conn.commit()
         conn.close()
 
     if user_message:
@@ -219,6 +222,7 @@ def download(filename):
 
 @app.route('/chat_list_history', methods=['GET'])
 def get_chat_list_history():
+    chat_list_log = load_chat_list_history()
     return jsonify(chat_list_log)
 
 @app.route('/chat_history/<path:chatKey>', methods=['GET'])
@@ -226,7 +230,19 @@ def get_chat_history(chatKey):
     if chatKey != 'undefined':
         return jsonify(load_chat_history(chatKey))
     else:
+        chat_log = load_chat_history("1")
         return jsonify(chat_log)
+
+
+@app.route('/chat_list_delete/<path:chatKey>', methods=['GET'])
+def chat_list_delete(chatKey):
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("DELETE FROM chat_list WHERE id = ?;",(chatKey,))
+    c.execute("DELETE FROM chat_history WHERE chatKey = ?;",(chatKey,))
+    conn.commit()
+    conn.close()
+    return "true"
 
 @app.route('/chat_list_add/<path:chatKey>', methods=['GET'])
 def chat_list_add(chatKey):
