@@ -18,6 +18,7 @@
       }
       .chat-list {
         height: 100%;
+        min-width: 210px;
         background-color: rgb(37, 37, 37);
         color:antiquewhite;
       }
@@ -41,7 +42,7 @@
       
       /* get */
       .message-container {
-            max-width: 800px;
+            max-width: 90%;
             margin: auto;
             margin-bottom: 1rem;
         }
@@ -91,18 +92,11 @@
         }
 
         .chat-item:hover {
-          color: rgb(209, 194, 78);
+          background-color: #baa809d7;
           cursor : pointer
         }
-
-        .chat-item:hover > .deleteIcon {
-          visibility: '';
-          color: red;
-          cursor : pointer
-        }
-
         .on {
-          color:rgb(209, 194, 78);
+          background-color:#baa809d7;
         }
 
         pre {
@@ -111,6 +105,10 @@
             white-space: pre-wrap;
             background-color: transparent;
             border: none;
+        }
+
+        .deleteIcon:hover {
+          color:black;
         }
     </style>
   </head>
@@ -131,7 +129,6 @@
                   <input type="text" class="form-control" id="message-input" placeholder="Send a message" aria-label="Recipient's username" aria-describedby="button-addon2">
                 </div>
                 <div class="col-auto">
-                  <span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;'>-</span>
                   <button class="btn btn-outline-secondary" type="submit" id="button-addon2">send</button>
                 </div>
                 </div>
@@ -142,6 +139,7 @@
       </div>
     </div>
     <script>
+      var trashIcon = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-trash3' viewBox='0 0 16 16'><path d='M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5ZM11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0H11Zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5h9.916Zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47ZM8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5Z'/></svg>"
 
       function isCodeSnippet(message) {
         const codePattern = /(?:```)([^\n]+)(?:\n)((?:.|\n)*?)(?:```)/gm;
@@ -159,23 +157,44 @@
 
       function newChatPage() {
         $(".chat-item").removeClass('on');
+        $(".deleteIcon").css("visibility", "hidden")
         $("#chat-container").empty()
       }
 
       function newChat(id, chatName, newChatYn) {
         let append
-        if(id == 1 || newChatYn  == 'Y'){
-          append = "<div id='" + id + "' class='chat-item on' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;'>-</span></div>"
+        if($("#chat-list > .chat-item").length == 0 || newChatYn  == 'Y'){
+          append = "<div id='" + id + "' class='chat-item on' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;' onclick='deleteChat(" + id + ")'>" + trashIcon + "</span></div>"
         }else {
-          append = "<div id='" + id + "' class='chat-item' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;'>-</span></div>"
+          append = "<div id='" + id + "' class='chat-item' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:hidden; width:20px; float:right; margin:0 5px;' onclick='deleteChat(" + id + ")'>" + trashIcon + "</span></div>"
         }
         $("#chat-list").append(append)
       }
 
       function clickChat(id) {
         $(".chat-item").removeClass('on')
+        $(".deleteIcon").css("visibility", "hidden")
+        $("#"+id + " .deleteIcon").css("visibility", "")
         $("#"+id).addClass("on")
         loadChatHistory()
+      }
+
+      function deleteChat(chatKey) {
+        if(confirm("채팅을 삭제하시겠습니까?")){
+          $.ajax({
+            url: "/chat_list_delete/" + chatKey,
+            method: "GET",
+            success: function(response) {
+              // window.location.reload()
+              $(".chat-list div").remove()
+              $(".chat-history").empty()
+              loadChatListHistory()
+            },
+            error: function() {
+                console.error("Error: Could not load chat history.");
+            }
+          });
+        }
       }
 
       function addChatList(id, chatName) {

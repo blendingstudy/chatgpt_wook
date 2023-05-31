@@ -9,14 +9,12 @@ import sqlite3
 import re
 import uuid
 
-# openai.api_key = "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"  
-openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
 chatKey = "1"
 chat_log = []
 chat_list_log = []
-CHAT_HISTORY_FILE = "chat_history.json"
 DATABASE = "chat_history.db"
 
 def create_table():
@@ -48,19 +46,11 @@ def load_chat_history(chatKey):
     return chat_log
 
 def save_chat_history(chatKey, role, content):
-    with open(CHAT_HISTORY_FILE, "w") as f:
-        json.dump(content, f)
-    
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
     c.execute("INSERT INTO chat_history (chatKey, role, content) VALUES (?, ?, ?)", (chatKey, role, content))
     conn.commit()
     conn.close()
-
-
-    
-
-
 
 chat_log = load_chat_history("1")
 chat_list_log = load_chat_list_history()
@@ -88,7 +78,7 @@ def find_links_with_partial_title(soup, partial_title):
 
 CODE_STORAGE_PATH = "saved_code"
 
-def process_and_store_code_block(code_block: str, file_name: str) -> str:
+def process_and_store_code_block(code_block: str, chatKey: int, chatName: str, file_name: str) -> str:
     language_match = re.search(r"```(\w+)", code_block)
     if language_match:
         language = language_match.group(1).lower()
@@ -98,18 +88,33 @@ def process_and_store_code_block(code_block: str, file_name: str) -> str:
     extension = LANGUAGE_EXTENSIONS.get(language, "txt")
     if not file_name.endswith(f".{extension}"):
         file_name += f".{extension}"
-    file_path = os.path.join(CODE_STORAGE_PATH, file_name)
+    # 채팅목록에 맞는 폴더 없으면 생성하기
+    createDirectory(CODE_STORAGE_PATH + "/" + str(chatKey) + "_" + chatName)
+    file_path = os.path.join(CODE_STORAGE_PATH + "/" + str(chatKey) + "_" + chatName, file_name)
     
     with open(file_path, "w") as f:
         f.write(code_block)
     
     return file_name
 
-def extract_filename(user_message: str, gpt_response: str, language: str) -> str:
-    extensions_pattern = r'\.(?:py|js|html|css|java|c|cpp|cs|php|rb|swift|go|kt)'
+def createDirectory(directory):
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print("Error: Failed to create the directory.")
+
+def extract_filename(user_message: str, gpt_response: str, code_block:str, language: str) -> str:
+    extensions_pattern = r'\.(?:py|js|html|ejs|css|java|c|cpp|cs|php|rb|swift|go|kt)'
     pattern = fr'\b(?:main|([a-zA-Z0-9-_]+)){extensions_pattern}\b'
-    
-    # 먼저 사용자 메시지에서 파일 이름과 확장자를 추출합니다.
+
+    # 먼저 코드블럭 앞에서 파일 이름과 확장자를 추출합니다.
+    before_code_block = gpt_response[0:gpt_response.find(code_block)]
+    match = re.search(pattern, before_code_block[before_code_block.rfind("```"):])
+    if match:
+        return match.group()
+
+    # 코드블럭 앞에서 찾지 못한 경우, 사용자 메시지에서 파일 이름과 확장자를 추출합니다.
     match = re.search(pattern, user_message)
     if match:
         return match.group()
@@ -122,8 +127,6 @@ def extract_filename(user_message: str, gpt_response: str, language: str) -> str
     # 파일 이름과 확장자를 찾지 못한 경우, 언어에 기반한 기본 이름과 확장자를 사용합니다.
     default_file_name = f"generated_code.{LANGUAGE_EXTENSIONS.get(language, 'txt')}"
     return default_file_name
-
-
 
 def get_url_summary(url: str) -> str:
     try:
@@ -145,6 +148,7 @@ LANGUAGE_EXTENSIONS = {
     "python": "py",
     "javascript": "js",
     "html": "html",
+    "ejs": "html",
     "css": "css",
     "java": "java",
     "c": "c",
@@ -164,6 +168,7 @@ def process_message():
     data = request.get_json()
     user_message = data.get('message')
     chatKey = data.get('chatKey')
+    chatName = ""
     # chatKey가 없으면 newChat. 새로운chatKey 생성해야함
     if chatKey == None:
         conn = sqlite3.connect(DATABASE)
@@ -171,9 +176,17 @@ def process_message():
         # todo null일때 처리해주어야함
         c.execute("SELECT IFNULL(max(id), 0)+1 FROM chat_list")
         chatKey = c.fetchone()[0]
+        chatName = user_message[0:10]
         if chatKey == 1:
             c.execute("UPDATE SQLITE_SEQUENCE SET seq = 0 WHERE name = 'chat_list'")
             conn.commit()
+            conn.close()
+    else:
+        # chatName가져오기
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        c.execute("SELECT chatName FROM chat_list WHERE id = ?;",(chatKey,))
+        chatName = c.fetchone()[0]
         conn.close()
 
     if user_message:
@@ -203,8 +216,8 @@ def process_message():
                 else:
                     # 기본 언어로 설정합니다.
                     language = "txt"
-                file_name = extract_filename(user_message, gpt_response, language)
-                stored_file_name = process_and_store_code_block(code_block, file_name)
+                file_name = extract_filename(user_message, gpt_response, code_block, language)
+                stored_file_name = process_and_store_code_block(code_block, chatKey, chatName, file_name)
                 download_link = f"{download_url}download/{stored_file_name}"
                 download_links.append(download_link)
 
@@ -232,7 +245,6 @@ def get_chat_history(chatKey):
     else:
         chat_log = load_chat_history("1")
         return jsonify(chat_log)
-
 
 @app.route('/chat_list_delete/<path:chatKey>', methods=['GET'])
 def chat_list_delete(chatKey):
