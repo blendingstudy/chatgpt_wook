@@ -9,7 +9,7 @@ import sqlite3
 import re
 import uuid
 
-openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
 chatKey = "1"
@@ -103,6 +103,20 @@ def createDirectory(directory):
             os.makedirs(directory)
     except OSError:
         print("Error: Failed to create the directory.")
+
+def createProjectStructure(gpt_response):
+    # gpt_response에 프로젝트 구조에 대한 답변이 포함돼있는지 확인
+    print(gpt_response)
+    structureTmp = gpt_response[gpt_response.find('```\n')+4:]
+    structureContent = structureTmp[0:structureTmp.find('\n```')]
+    if structureContent:
+        print("구조 있다")
+        print(structureContent)
+    # - 폴더와 계층을 구별하는 방법
+    # /로 끝나면 폴더로 간주
+    # /로 끝나는데 왼쪽에 공백(탭) 또는 다른 특수문자 ( ㄴ..)가 있다면 하위계층 폴더로 간주.. 
+    # 하위 > 하위 폴더는 \n ~ 폴더명/  앞까지의 길이로 몇레벨의 폴더인지 측정
+
 
 def extract_filename(user_message: str, gpt_response: str, code_block:str, language: str) -> str:
     extensions_pattern = r'\.(?:py|js|html|ejs|css|java|c|cpp|cs|php|rb|swift|go|kt)'
@@ -203,7 +217,8 @@ def process_message():
         gpt_response = response["choices"][0]["message"]["content"]
         chat_log.append({"role": "assistant", "content": gpt_response})
         save_chat_history(chatKey, "assistant", gpt_response)
-
+        # 프로젝트 구조에 대한 답변일시 구조 생성
+        createProjectStructure(gpt_response)
         code_block_matches = list(re.finditer(r"```\w+\n([\s\S]*?)```", gpt_response))
         download_links = []
         if code_block_matches:
