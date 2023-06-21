@@ -118,9 +118,9 @@
         <div class="col-md-2 chat-list" id="chat-list">
           <button class="btn btn-outline-secondary" style="width:100%;margin-top:15px" onclick="newChatPage()"> + New chat</button>
         </div>
-        <div class="col-md-10 chat-area">
+        <div class="col-md-10 chat-area" id="chat-area">
           <div class="chat-history" id="chat-container" style="overflow-y: auto;">
-            <!-- chat-history -->
+            <!-- tmp chat-history -->
           </div>
           <div class="chat-typing">
             <form id="message-form" style="width:100%;">
@@ -157,26 +157,39 @@
 
       function newChatPage() {
         $(".chat-item").removeClass('on');
-        $(".deleteIcon").css("visibility", "hidden")
-        $("#chat-container").empty()
+        $(".deleteIcon").css("display", "none")
+        //$("#chat-container").empty()
+        $(".chat-history").css("display", "none")
+        //chat-typing 앞에
+        $("#chat-area").prepend("<div class='chat-history' id='chat-container' style='overflow-y: auto;'><!-- chat-history --></div>")
       }
 
       function newChat(id, chatName, newChatYn) {
-        let append
+        let appendChatName
+        let appendChatHistory
+        $("#chat-container").attr("id", "chat-container"+id)
         if($("#chat-list > .chat-item").length == 0 || newChatYn  == 'Y'){
-          append = "<div id='" + id + "' class='chat-item on' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;' onclick='deleteChat(" + id + ")'>" + trashIcon + "</span></div>"
+          appendChatName = "<div id='" + id + "' class='chat-item on' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:; width:20px; float:right; margin:0 5px;' onclick='deleteChat(" + id + ")'>" + trashIcon + "</span></div>"
+          appendChatHistory = "<div class='chat-history' id='chat-container' style='overflow-y: auto;'><!-- tmp chat-history --></div>"
+
         }else {
-          append = "<div id='" + id + "' class='chat-item' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:hidden; width:20px; float:right; margin:0 5px;' onclick='deleteChat(" + id + ")'>" + trashIcon + "</span></div>"
+          appendChatName = "<div id='" + id + "' class='chat-item' onclick='clickChat(id)'>" + chatName + "<span class='deleteIcon' style='visibility:hidden; width:20px; float:right; margin:0 5px;' onclick='deleteChat(" + id + ")'>" + trashIcon + "</span></div>"
+          appendChatHistory = "<div class='chat-history' id='chat-container' style='overflow-y: auto;'><!-- tmp chat-history --></div>"
         }
-        $("#chat-list").append(append)
+        $("#chat-list").append(appendChatName)
+        $("#chat-area").prepend(appendChatHistory)
+        $(".chat-history").css("display", "none")
+        $("#chat-container"+id).css("display", "")
       }
 
       function clickChat(id) {
         $(".chat-item").removeClass('on')
         $(".deleteIcon").css("visibility", "hidden")
+        $(".chat-history").css("display", "none")
+        $("#chat-container" + id).css("display", "")
         $("#"+id + " .deleteIcon").css("visibility", "")
         $("#"+id).addClass("on")
-        loadChatHistory()
+        //loadChatHistory()
       }
 
       function deleteChat(chatKey) {
@@ -201,7 +214,7 @@
         newChat(id, chatName)
       }
 
-      function addMessage(content, isUser) {
+      function addMessage(content, isUser, chatKey) {
         const className = isUser ? "user-message" : "ai-message";
         const name = isUser ? "Me" : "GPTChat";
         const nameLabel = $("<div>").addClass("name-label").text(name);
@@ -210,9 +223,10 @@
         const formattedContent = isCodeSnippet(content) ? formatCodeSnippet(content) : content;
         messageBox.html(formattedContent);
         messageContainer.append(nameLabel).append(messageBox);
-        $("#chat-container").append(messageContainer);
-        if($('#chat-container').hasScrollBar()) {
-          $('#chat-container').animate({
+        if(chatKey == undefined) chatKey = '';
+        $("#chat-container" + chatKey).append(messageContainer);
+        if($('#chat-container' + chatKey).hasScrollBar()) {
+          $('#chat-container' + chatKey).animate({
             scrollTop: $('#chat-container')[0].scrollHeight
           }, 400);
         }
@@ -258,7 +272,7 @@
           method: "GET",
           success: function(chatHistory) {
               for (const message of chatHistory) {
-                  addMessage(message.content, message.role === "user");
+                  addMessage(message.content, message.role === "user", chatKey);
               }
           },
           error: function() {
@@ -277,7 +291,7 @@
           //chatKey. null이면 newChat
           chatKey = $(".chat-item.on").attr('id');
           const message = $("#message-input").val();
-          addMessage(message, true);
+          addMessage(message, true, chatKey);
 
           $.ajax({
               url: "/message",
@@ -285,7 +299,7 @@
               contentType: "application/json",
               data: JSON.stringify({ chatKey: chatKey, message: message }),
               success: function(response) {
-                  addMessage(response.response, false);
+                  addMessage(response.response, false, chatKey);
                   chat_list_add(response.chatKey);
               },
               error: function() {

@@ -9,7 +9,7 @@ import sqlite3
 import re
 import uuid
 
-openai.api_key = "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"  
+openai.api_key = "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"  
 download_url = "http://127.0.0.1/"
 app = Flask(__name__)
 chatKey = "1"
